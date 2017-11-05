@@ -1,0 +1,3 @@
+*.pyc
+data/stations.json
+test.py
