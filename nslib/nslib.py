@@ -11,12 +11,14 @@ from nsexceptions import MalfomedRoute, InvalidStation
 DISRUPTIONS_CACHE_SEC = 60
 
 class Nslib(object):
+    """Class exposing all other API methods"""
     def __init__(self):
         self.Account = Account
 
     @property
     @cached(TTLCache(maxsize=1, ttl=DISRUPTIONS_CACHE_SEC))
     def disruptions(self):
+        """Current and planned disruptions on the rail network."""
         headers = {
             "Accept-Encoding": "gzip",
             "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
@@ -27,8 +29,7 @@ class Nslib(object):
         rNow = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?actual=true", headers=headers)
         rPlanned = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?type=werkzaamheid", headers=headers)
 
-        disruptionArray = rPlanned.json()
-        disruptionArray = disruptionArray["payload"]
+        disruptionArray = rPlanned.json()["payload"]
         foundDisruptions = []
         output = []
 
@@ -66,6 +67,7 @@ class Nslib(object):
         return output
 
     def getRoute(self, route, time=datetime.datetime.now()):
+        """Get route options between 2 to 3 points."""
         if len(route) < 2:
             raise MalfomedRoute("Route array should contain at least 2 stations.")
         if len(route) > 3:
@@ -99,12 +101,11 @@ class Nslib(object):
 
         rRoute = requests.get("https://ews-rpx.ns.nl/mobile-api-planner", params = params, headers = {
             "Accept-Encoding": "gzip",
+            # The default username and password (android, mvdzig) works for any non-auth endpoint
             "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
             "Connection": "Keep-Alive",
             "User-Agent": "ReisplannerXtra/5.0.14 "
         })
-
-        print(rRoute.url)
 
         routes = xmltodict.parse(rRoute.text)
         routes = routes["ReisMogelijkheden"]["ReisMogelijkheid"]
@@ -160,6 +161,7 @@ class Nslib(object):
         return output
 
     def getDepartures(self, station):
+        """Get departing trains from a station."""
         if station not in STATIONS:
             raise InvalidStation("\"%s\" is not a valid station code." % station)
 

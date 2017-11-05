@@ -1,4 +1,3 @@
-
 class InvalidCredentials(Exception):
     """The username or password are invalid."""
 

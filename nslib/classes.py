@@ -8,9 +8,11 @@ from cachetools import cached, TTLCache
 from data.stations import STATIONS
 from nsexceptions import ConnectionError, InvalidCredentials, InvalidCard, TooManyRequests
 
-CARD_CACHE_SECONDS = 240
+CARD_CACHE_SEC = 240
 
 class Card(object):
+    """Representation of a single ov-chipcard."""
+
     def __init__(self, number, headers):
         self.number = number
 
@@ -20,6 +22,7 @@ class Card(object):
         self._fetchCID()
 
     def _fetchCID(self):
+        """Fetch CID token from NS servers for later use"""
         headers = self._headers
         headers["Content-Type"] = "application/x-www-form-urlencoded"
 
@@ -28,17 +31,20 @@ class Card(object):
         except requests.exceptions.ConnectionError:
             raise ConnectionError("Could not connect to NS servers.")
 
+        # This endpoint is strictly rate limited, this error will solve itself in a minute or 2
         if "Minimum request interval exceeded" in rCID.text:
             raise TooManyRequests("Minimum request interval exceeded.")
 
         self._CID = rCID.json()["cid"]
 
     @property
-    @cached(TTLCache(maxsize=1, ttl=CARD_CACHE_SECONDS))
+    @cached(TTLCache(maxsize=1, ttl=CARD_CACHE_SEC))
     def _state(self):
+        """Update the last known state of the card."""
         headers = {
                 "Accept": self._headers["Accept"],
                 "Accept-Encoding": "gzip",
+                # The original API request used UUIDv1, but we use UUIDv4 for simplicity
                 "X-Request-ID": str(uuid.uuid4()),
                 "Authorization": self._headers["Authorization"],
                 "User-Agent": "rpx_android/5.0.14:519",
@@ -81,10 +87,12 @@ class Card(object):
 
     @property
     def checkedIn(self):
+        """Return check-in status and update if needed"""
         return self._state["checkedIn"]
 
     @property
     def balance(self):
+        """Return balance if available and update if needed"""
         if "balance" in self._state:
             return self._state["balance"]
         else:
@@ -92,14 +100,17 @@ class Card(object):
 
     @property
     def trips(self):
+        """Return last known trips and update if needed"""
         return self._state["trips"]
 
 class Account(object):
+    """Representation of a NS online account."""
     def __init__(self, username, password):
         self.user = username
         self.password = username
         self.cards = []
 
+        # The bearer token is a simple USER:PASS string encoded in base64
         self._bearer = base64.b64encode((username + ":" + password).encode("ascii")).decode("ascii")
         self._headers = {
             "Accept": "application/json",
@@ -113,6 +124,7 @@ class Account(object):
         self._login()
 
     def _login(self):
+        """Authenticate with the NS servers."""
         self._headers["Authorization"] = "Basic " + self._bearer
 
         try:
