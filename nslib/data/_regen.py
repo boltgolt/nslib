@@ -1,4 +1,5 @@
 import json
+import requests
 
 countryCodes = {
     "A": "AT",
@@ -9,9 +10,20 @@ countryCodes = {
     "I": "IT",
 }
 
-with open("stations.json") as stations_file:
-    data = json.load(stations_file)
+print "Fetching station info..."
 
+headers = {
+    "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
+    "Host": "reisinfo.ns-mlab.nl",
+    "Connection": "Keep-Alive",
+    "User-Agent": "Apache-HttpClient/UNAVAILABLE (java 1.4)"
+}
+
+rStations = requests.get("https://reisinfo.ns-mlab.nl/api/v2/stations", headers=headers)
+
+print "Got %s response, formatting data.." % rStations.status_code
+
+data = rStations.json()
 output = {}
 
 for station in data["payload"]:
@@ -29,6 +41,10 @@ for station in data["payload"]:
         }
     }
 
+print "Writing data to file..."
+
 f = open("stations.py", "w")
 f.write("STATIONS = " + json.dumps(output))
 f.close()
+
+print "Done."
