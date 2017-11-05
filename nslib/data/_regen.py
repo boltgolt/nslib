@@ -10,7 +10,7 @@ countryCodes = {
     "I": "IT",
 }
 
-print "Fetching station info..."
+print("Fetching station info...")
 
 headers = {
     "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
@@ -21,7 +21,7 @@ headers = {
 
 rStations = requests.get("https://reisinfo.ns-mlab.nl/api/v2/stations", headers=headers)
 
-print "Got %s response, formatting data.." % rStations.status_code
+print("Got %s response, formatting data.." % rStations.status_code)
 
 data = rStations.json()
 output = {}
@@ -41,10 +41,10 @@ for station in data["payload"]:
         }
     }
 
-print "Writing data to file..."
+print("Writing data to file...")
 
 f = open("stations.py", "w")
 f.write("STATIONS = " + json.dumps(output))
 f.close()
 
-print "Done."
+print("Done.)
