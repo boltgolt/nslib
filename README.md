@@ -1,4 +1,4 @@
-# nslib 0.0.1
+# nslib 0.0.2
 
 Library to interact with the Dutch Railways (Nederlandse Spoorwegen).
 

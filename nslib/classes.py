@@ -5,8 +5,8 @@ import datetime
 
 from cachetools import cached, TTLCache
 
-from data.stations import STATIONS
-from nsexceptions import ConnectionError, InvalidCredentials, InvalidCard, TooManyRequests
+from .stations import STATIONS
+from .nsexceptions import ConnectionError, InvalidCredentials, InvalidCard, TooManyRequests
 
 CARD_CACHE_SEC = 240
 

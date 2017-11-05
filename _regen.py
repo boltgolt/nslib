@@ -43,8 +43,8 @@ for station in data["payload"]:
 
 print("Writing data to file...")
 
-f = open("stations.py", "w")
+f = open("nslib/stations.py", "w")
 f.write("STATIONS = " + json.dumps(output))
 f.close()
 
-print("Done.)
+print("Done.")

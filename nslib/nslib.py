@@ -4,13 +4,13 @@ import xmltodict
 
 from cachetools import cached, TTLCache
 
-from data.stations import STATIONS
-from classes import Account, Card
-from nsexceptions import MalfomedRoute, InvalidStation
+from .stations import STATIONS
+from .classes import Account, Card
+from .nsexceptions import MalfomedRoute, InvalidStation
 
 DISRUPTIONS_CACHE_SEC = 60
 
-class Nslib(object):
+class NsAPI(object):
     """Class exposing all other API methods"""
     def __init__(self):
         self.Account = Account
