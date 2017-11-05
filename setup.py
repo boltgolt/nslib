@@ -7,14 +7,15 @@ requirements = requirements_file
 
 setup(
     name = 'nslib',
-    packages = ['nslib'], # this must be the same as the name above
+    packages = ['nslib'],
     version = '0.0.2',
     description = 'Full-featured library for the dutch railways (NS).',
     author = 'boltgolt',
     author_email = 'boltgolt@gmail.com',
-    url = 'https://github.com/Boltgolt/nslib', # use the URL to the github repo
-    download_url = 'https://github.com/Boltgolt/nslib/archive/0.0.1.tar.gz', # I'll explain this in a second
-    keywords = ['transport', 'api'], # arbitrary keywords
+    license='MIT',
+    url = 'https://github.com/Boltgolt/nslib',
+    download_url = 'https://github.com/Boltgolt/nslib/archive/0.0.2.tar.gz',
+    keywords = ['transport', 'api'],
     install_requires=requirements,
     classifiers = []
 )
