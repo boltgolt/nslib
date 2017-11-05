@@ -1,129 +1,188 @@
 import requests
-import base64
-import uuid
 import datetime
+import xmltodict
 
 from cachetools import cached, TTLCache
 
 from data.stations import STATIONS
-from nsexceptions import (ConnectionError, InvalidCredentials, InvalidCard, TooManyRequests)
+from classes import Account, Card
+from nsexceptions import MalfomedRoute, InvalidStation
 
-CACHE_SECONDS = 240
+DISRUPTIONS_CACHE_SEC = 60
 
-state_cache = TTLCache(maxsize=1, ttl=CACHE_SECONDS)
-
-class NsCard(object):
-    def __init__(self, number, headers):
-        self.number = number
-
-        self._CID = None
-        self._headers = headers
-
-        self._fetchCID()
-
-    def _fetchCID(self):
-        headers = self._headers
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
-
-        try:
-            rCID = requests.post("https://ews-rpx.ns.nl/private-reistransacties-api/service/selectcard/" + str(self.number), headers=headers)
-        except requests.exceptions.ConnectionError:
-            raise ConnectionError("Could not connect to NS servers.")
-
-        if "Minimum request interval exceeded" in rCID.text:
-            raise TooManyRequests("Minimum request interval exceeded.")
-
-        self._CID = rCID.json()["cid"]
+class Nslib(object):
+    def __init__(self):
+        self.Account = Account
 
     @property
-    @cached(state_cache)
-    def _state(self):
+    @cached(TTLCache(maxsize=1, ttl=DISRUPTIONS_CACHE_SEC))
+    def disruptions(self):
         headers = {
-                "Accept": self._headers["Accept"],
-                "Accept-Encoding": "gzip",
-                "X-Request-ID": str(uuid.uuid4()),
-                "Authorization": self._headers["Authorization"],
-                "User-Agent": "rpx_android/5.0.14:519",
-                "connection": "Keep-Alive",
-                "Host": self._headers["Host"],
-                "content-length": self._headers["content-length"]
+            "Accept-Encoding": "gzip",
+            "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
+            "Connection": "Keep-Alive",
+            "User-Agent": "Google-HTTP-Java-Client/1.19.0 (gzip)"
         }
 
-        try:
-            rCard = requests.get("https://ews-rpx.ns.nl/private-reistransacties-api/service/transactions/" + self._CID, headers=headers)
-        except requests.exceptions.ConnectionError:
-            raise ConnectionError("Could not connect to NS servers.")
+        rNow = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?actual=true", headers=headers)
+        rPlanned = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?type=werkzaamheid", headers=headers)
 
-        cardData = rCard.json()
+        disruptionArray = rPlanned.json()
+        disruptionArray = disruptionArray["payload"]
+        foundDisruptions = []
+        output = []
 
-        stateObject = {
-            "checkedIn": False,
-            "trips": []
-        }
+        for dis in disruptionArray:
+            foundDisruptions.append(dis["id"])
 
-        if len(cardData["transactions"]) > 0:
-            stateObject["balance"] = cardData["transactions"][0]["remainingPurseValue"]
+        currentDisruptions = rNow.json()["payload"]
 
-            for transaction in cardData["transactions"]:
-                trip = {
-                    "balance": transaction["remainingPurseValue"]
+        for dis in currentDisruptions:
+            if dis["id"] not in foundDisruptions:
+                disruptionArray.append(dis)
+
+        for dis in disruptionArray:
+            outDis = {
+                "id": dis["id"],
+                "title": dis["header"],
+                "cause": dis["oorzaak"],
+                "effect": dis["gevolg"],
+                "stations": []
+            }
+
+            for track in dis["trajecten"]:
+                for stop in track["stations"]:
+                    outStop = STATIONS[stop.upper()]
+
+                    if "begintijd" in track:
+                        outStop["starts"] = track["begintijd"]
+                    if "eindtijd" in track:
+                        outStop["ends"] = track["eindtijd"]
+
+                    outDis["stations"].append(outStop)
+
+            output.append(outDis)
+
+        return output
+
+    def getRoute(self, route, time=datetime.datetime.now()):
+        if len(route) < 2:
+            raise MalfomedRoute("Route array should contain at least 2 stations.")
+        if len(route) > 3:
+            raise MalfomedRoute("Route array should not contain more than 3 stations.")
+
+        for stationCode in route:
+            if stationCode not in STATIONS:
+                raise InvalidStation("\"%s\" is not a valid station code." % stationCode)
+
+        params = [
+            ("callerid",  "RPX:reisadvies"),
+            ("departure",  "true"),
+            ("hslAllowed",  "true"),
+            ("yearCard",  "false"),
+            ("minimalChangeTime",  "0"),
+            ("travelAdviceType",  "OPTIMAL"),
+            ("dateTime",  time.strftime("%Y-%m-%dT%H:%M")),
+            ("previousAdvices",  "1"),
+            ("nextAdvices",  "6"),
+            ("passing",  "true"),
+            ("product",  "GEEN")
+        ]
+
+        params.append(("fromStation", route[0]))
+
+        if len(route) == 2:
+            params.append(("toStation", route[1]))
+        else:
+            params.append(("viaStation", route[1]))
+            params.append(("toStation", route[2]))
+
+        rRoute = requests.get("https://ews-rpx.ns.nl/mobile-api-planner", params = params, headers = {
+            "Accept-Encoding": "gzip",
+            "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
+            "Connection": "Keep-Alive",
+            "User-Agent": "ReisplannerXtra/5.0.14 "
+        })
+
+        print(rRoute.url)
+
+        routes = xmltodict.parse(rRoute.text)
+        routes = routes["ReisMogelijkheden"]["ReisMogelijkheid"]
+        output = []
+
+        for route in routes:
+            outRoute = {
+                "transfers": route["AantalOverstappen"],
+                "asSchuduled": True if route["Status"] == "AS_SCHEDULED" else False,
+                "depature": {
+                    "scheduled": route["GeplandeVertrekTijd"],
+                    "actual": route["ActueleVertrekTijd"]
+                },
+                "arrival": {
+                    "scheduled": route["GeplandeAankomstTijd"],
+                    "actual": route["ActueleAankomstTijd"]
+                },
+                "legs": []
+            }
+
+            for leg in route["ReisDeel"]:
+                outLeg = {
+                    "provider": leg["Vervoerder"],
+                    "id": leg["RitNummer"],
+                    "asSchuduled": True if leg["Status"] == "AS_SCHEDULED" else False,
+                    "stops": []
                 }
 
-                trip["arrival"] = STATIONS[transaction["arrival"]["station"]["stationCode"]]
-                trip["arrival"]["stationCode"] = transaction["arrival"]["station"]["stationCode"]
-                trip["arrival"]["time"] = datetime.datetime.strptime(transaction["arrival"]["timestamp"], "%d-%m-%Y %H:%M:%S +01:00")
+                if "Richting" in leg:
+                    outLeg["finalDestination"] = leg["Richting"]
 
-                trip["departure"] = STATIONS[transaction["departure"]["station"]["stationCode"]]
-                trip["departure"]["stationCode"] = transaction["departure"]["station"]["stationCode"]
-                trip["departure"]["time"] = datetime.datetime.strptime(transaction["departure"]["timestamp"], "%d-%m-%Y %H:%M:%S +01:00")
+                if "UitstapZijde" in leg:
+                    outLeg["exitSide"] = "right" if leg["UitstapZijde"] == "Rechts" else "left"
 
-                stateObject["trips"].append(trip)
+                for stop in leg["ReisStop"]:
+                    outStop = STATIONS[stop["Code"]]
 
-        return stateObject
+                    outStop["nonstop"] = False if stop["@type"] == "STOP" else True
 
-    @property
-    def checkedIn(self):
-        return self._state["checkedIn"]
 
-    @property
-    def balance(self):
-        if "balance" in self._state:
-            return self._state["balance"]
-        else:
-            return None
+                    if "Tijd" in stop:
+                        outStop["time"] = stop["Tijd"]
 
-    @property
-    def trips(self):
-        return self._state["trips"]
+                    if "Spoor" in stop:
+                        outStop["track"] = stop["Spoor"]["#text"]
 
-class NsAccount(object):
-    def __init__(self, username, password):
-        self.user = username
-        self.password = username
-        self.cards = []
+                    outLeg["stops"].append(outStop)
 
-        self._bearer = base64.b64encode((username + ":" + password).encode("ascii")).decode("ascii")
-        self._headers = {
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip,deflate,sdch",
-            "User-Agent": "Google-HTTP-Java-Client/1.19.0 (gzip)",
-            "connection": "Close",
-            "Host": "ews-rpx.ns.nl",
-            "content-length": "0"
-        }
+                outRoute["legs"].append(outLeg)
 
-        self._login()
+            output.append(outRoute)
 
-    def _login(self):
-        self._headers["Authorization"] = "Basic " + self._bearer
+        return output
 
-        try:
-            rLogin = requests.get("https://ews-rpx.ns.nl/private-reistransacties-api/service/cards", headers=self._headers)
-        except requests.exceptions.ConnectionError:
-            raise ConnectionError("Could not connect to NS servers.")
+    def getDepartures(self, station):
+        if station not in STATIONS:
+            raise InvalidStation("\"%s\" is not a valid station code." % station)
 
-        if "401 Unauthorized" in rLogin.text:
-            raise InvalidCredentials("The username or password are invalid.")
+        response = requests.get("https://ews-rpx.ns.nl/mobile-api-avt", params = [
+            ("station", station)
+        ], headers = {
+            "Accept-Encoding": "gzip",
+            "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
+            "Connection": "Keep-Alive",
+            "User-Agent": "ReisplannerXtra/5.0.14 "
+        })
 
-        for card in rLogin.json()["cards"]:
-            self.cards.append(NsCard(card["ovcpNumber"], self._headers))
+        departures = xmltodict.parse(response.text)["ActueleVertrekTijden"]["VertrekkendeTrein"]
+        output = []
+
+        for departure in departures:
+            output.append({
+                "finalDestination": departure["EindBestemming"],
+                "id": departure["RitNummer"],
+                "type": departure["TreinSoort"],
+                "track": departure["VertrekSpoor"]["#text"],
+                "time": departure["VertrekTijd"],
+                "provider": departure["Vervoerder"]
+            })
+
+        return output
