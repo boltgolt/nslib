@@ -10,6 +10,9 @@ class InvalidCard(Exception):
 class ConnectionError(Exception):
     """Could not connect to NS servers."""
 
+class InvalidResponse(Exception):
+    """The NS servers returned unexpected data."""
+
 class MalfomedRoute(Exception):
     """Invalid route array."""
 

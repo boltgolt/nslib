@@ -1,12 +1,15 @@
 import requests
 import datetime
 import xmltodict
+import json
 
 from cachetools import cached, TTLCache
 
-from .stations import STATIONS
 from .classes import Account, Card
+from .helpers import getStation
 from .nsexceptions import MalfomedRoute, InvalidStation
+
+from .stations import STATIONS
 
 DISRUPTIONS_CACHE_SEC = 60
 
@@ -53,7 +56,9 @@ class NsAPI(object):
 
             for track in dis["trajecten"]:
                 for stop in track["stations"]:
-                    outStop = STATIONS[stop.upper()]
+                    outStop = {
+                        station: getStation(stop)
+                    }
 
                     if "begintijd" in track:
                         outStop["starts"] = track["begintijd"]
@@ -141,7 +146,9 @@ class NsAPI(object):
                     outLeg["exitSide"] = "right" if leg["UitstapZijde"] == "Rechts" else "left"
 
                 for stop in leg["ReisStop"]:
-                    outStop = STATIONS[stop["Code"]]
+                    outStop = {
+                        station: getStation(stop["Code"])
+                    }
 
                     outStop["nonstop"] = False if stop["@type"] == "STOP" else True
 

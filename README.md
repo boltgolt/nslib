@@ -6,7 +6,7 @@ Library to interact with the Dutch Railways (Nederlandse Spoorwegen).
 
 ```python
 # Initialize nslib
-ns = Nslib()
+ns = NsAPI()
 
 # Current and planned disruptions on the rail network
 ns.disruptions

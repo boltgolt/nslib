@@ -1,2 +1,6 @@
 *.pyc
 test.py
+
+*.egg-info
+dist
+build

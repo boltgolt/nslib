@@ -6,7 +6,8 @@ import datetime
 from cachetools import cached, TTLCache
 
 from .stations import STATIONS
-from .nsexceptions import ConnectionError, InvalidCredentials, InvalidCard, TooManyRequests
+from .helpers import getStation
+from .nsexceptions import ConnectionError, InvalidCredentials, InvalidCard, TooManyRequests, InvalidResponse, InvalidStation
 
 CARD_CACHE_SEC = 240
 
@@ -58,30 +59,40 @@ class Card(object):
         except requests.exceptions.ConnectionError:
             raise ConnectionError("Could not connect to NS servers.")
 
-        cardData = rCard.json()
-
         stateObject = {
             "checkedIn": False,
             "trips": []
         }
 
-        if len(cardData["transactions"]) > 0:
-            stateObject["balance"] = cardData["transactions"][0]["remainingPurseValue"]
+        try:
+            cardData = rCard.json()
 
-            for transaction in cardData["transactions"]:
-                trip = {
-                    "balance": transaction["remainingPurseValue"]
-                }
+            if len(cardData["transactions"]) > 0:
+                stateObject["balance"] = cardData["transactions"][0]["remainingPurseValue"]
 
-                trip["arrival"] = STATIONS[transaction["arrival"]["station"]["stationCode"]]
-                trip["arrival"]["stationCode"] = transaction["arrival"]["station"]["stationCode"]
-                trip["arrival"]["time"] = datetime.datetime.strptime(transaction["arrival"]["timestamp"], "%d-%m-%Y %H:%M:%S +01:00")
+                for transaction in cardData["transactions"]:
+                    trip = {
+                        "balance": transaction["remainingPurseValue"],
+                        "departure": {}
+                    }
 
-                trip["departure"] = STATIONS[transaction["departure"]["station"]["stationCode"]]
-                trip["departure"]["stationCode"] = transaction["departure"]["station"]["stationCode"]
-                trip["departure"]["time"] = datetime.datetime.strptime(transaction["departure"]["timestamp"], "%d-%m-%Y %H:%M:%S +01:00")
+                    trip["departure"]["station"] = getStation(transaction["departure"]["station"]["stationCode"])
+                    trip["departure"]["time"] = datetime.datetime.strptime(transaction["departure"]["timestamp"], "%d-%m-%Y %H:%M:%S +01:00")
 
-                stateObject["trips"].append(trip)
+                    if "arrival" in transaction:
+                        trip["arrival"] = {
+                            "station": getStation(transaction["arrival"]["station"]["stationCode"]),
+                            "time": datetime.datetime.strptime(transaction["arrival"]["timestamp"], "%d-%m-%Y %H:%M:%S +01:00")
+                        }
+
+
+                    elif cardData["transactions"].index(transaction) == 0:
+                        # If the transaction has no arrival station and is the last transaction, the card is still cheked in
+                        stateObject.checkedIn = True
+
+                    stateObject["trips"].append(trip)
+        except (KeyError, IndexError, ValueError) as error:
+            raise InvalidResponse("Invalid response from NS severs (" + str(error) + "): " + rCard.text) from error
 
         return stateObject
 
