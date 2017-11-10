@@ -5,7 +5,7 @@ import json
 
 from cachetools import cached, TTLCache
 
-from .classes import Account, Card
+from .classes import Account, Card, Train
 from .helpers import getStation
 from .nsexceptions import MalfomedRoute, InvalidStation
 
@@ -17,6 +17,7 @@ class NsAPI(object):
     """Class exposing all other API methods"""
     def __init__(self):
         self.Account = Account
+        self.Train = Train
 
     @property
     @cached(TTLCache(maxsize=1, ttl=DISRUPTIONS_CACHE_SEC))
