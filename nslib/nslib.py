@@ -1,17 +1,30 @@
 import requests
-import datetime
 import xmltodict
 import json
 
+from datetime import datetime, timedelta
 from cachetools import cached, TTLCache
 
 from .classes import Account, Card, Train
-from .helpers import getStation
+from .helpers import getStation, fetchStations
 from .nsexceptions import MalfomedRoute, InvalidStation
 
 from .stations import STATIONS
 
 DISRUPTIONS_CACHE_SEC = 60
+
+try:
+    from .stations import RETRIEVED
+    sinceRetrieve = datetime.now() - datetime.strptime(RETRIEVED, "%Y-%m-%d %H:%M:%S")
+
+    if timedelta(days=60) < sinceRetrieve:
+        print("Refreshing stale {}-days-old station data.".format(sinceRetrieve.days))
+        fetchStations()
+    else:
+        print("Using station cache, as it is only {} days old.".format(sinceRetrieve.days))
+except ImportError:
+    print("Fetching station data for the first time.")
+    fetchStations()
 
 class NsAPI(object):
     """Class exposing all other API methods"""
@@ -72,7 +85,7 @@ class NsAPI(object):
 
         return output
 
-    def getRoute(self, route, time=datetime.datetime.now()):
+    def getRoute(self, route, time=datetime.now()):
         """Get route options between 2 to 3 points."""
         if len(route) < 2:
             raise MalfomedRoute("Route array should contain at least 2 stations.")
