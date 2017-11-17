@@ -53,7 +53,7 @@ def fetchStations():
     f.write("STATIONS = " + json.dumps(output))
     f.close()
 
-    print("Successfully indexed {}KB of station data.".format(round(len(rStations.content) / 1024,1)))
+    _LOGGER.info("Successfully indexed {}KB of station data.".format(round(len(rStations.content) / 1024,1)))
 
 def getStation(code):
     from .stations import STATIONS
