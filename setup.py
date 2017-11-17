@@ -5,17 +5,19 @@ requirements_file = [line.strip()
                      if line.strip() and not line.startswith('#')]
 requirements = requirements_file
 
+version = '0.0.2'
+
 setup(
     name = 'nslib',
     packages = ['nslib'],
-    version = '0.0.2',
+    version = version,
     description = 'Full-featured library for the dutch railways (NS).',
     author = 'boltgolt',
     author_email = 'boltgolt@gmail.com',
     license='MIT',
     url = 'https://github.com/Boltgolt/nslib',
-    download_url = 'https://github.com/Boltgolt/nslib/archive/0.0.2.tar.gz',
+    download_url = 'https://github.com/Boltgolt/nslib/archive/{}.tar.gz'.format(version),
     keywords = ['transport', 'api'],
-    install_requires=requirements,
+    install_requires = requirements,
     classifiers = []
 )

@@ -1,3 +1,6 @@
+"""
+Libary for interacting with the NS (Dutch Railways) api.
+"""
 import requests
 import xmltodict
 import json
@@ -8,13 +11,11 @@ from cachetools import cached, TTLCache
 
 from .classes import Account, Card, Train
 from .helpers import getStation, fetchStations
-from .nsexceptions import MalfomedRoute, InvalidStation
+from .nsexceptions import MalfomedRoute, InvalidStation, ConnectionError
 
 from .stations import STATIONS
 
 _LOGGER = logging.getLogger(__name__)
-
-logging.basicConfig(level=logging.DEBUG)
 
 DISRUPTIONS_CACHE_SEC = 60
 
@@ -40,8 +41,12 @@ def getDisruptions():
         "User-Agent": "Google-HTTP-Java-Client/1.19.0 (gzip)"
     }
 
-    rNow = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?actual=true", headers=headers)
-    rPlanned = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?type=werkzaamheid", headers=headers)
+    try:
+        # The app uses 2 endpoints which return different data
+        rNow = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?actual=true", headers=headers)
+        rPlanned = requests.get("https://ews-rpx.ns.nl/private-ns-api/json/v1/verstoringen?type=werkzaamheid", headers=headers)
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError("Could not connect to NS servers.")
 
     disruptionArray = rPlanned.json()["payload"]
     foundDisruptions = []
@@ -52,6 +57,7 @@ def getDisruptions():
 
     currentDisruptions = rNow.json()["payload"]
 
+    # Because the disruptions in the endpoints can overlap, we need to check if it already exists
     for dis in currentDisruptions:
         if dis["id"] not in foundDisruptions:
             disruptionArray.append(dis)
@@ -91,7 +97,7 @@ def getRoute(route, time=datetime.now()):
 
     for stationCode in route:
         if stationCode not in STATIONS:
-            raise InvalidStation("\"%s\" is not a valid station code." % stationCode)
+            raise InvalidStation("\"{}\" is not a valid station code.".format(stationCode))
 
     params = [
         ("callerid",  "RPX:reisadvies"),
@@ -115,13 +121,17 @@ def getRoute(route, time=datetime.now()):
         params.append(("viaStation", route[1]))
         params.append(("toStation", route[2]))
 
-    rRoute = requests.get("https://ews-rpx.ns.nl/mobile-api-planner", params = params, headers = {
-        "Accept-Encoding": "gzip",
-        # The default username and password (android, mvdzig) works for any non-auth endpoint
-        "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
-        "Connection": "Keep-Alive",
-        "User-Agent": "ReisplannerXtra/5.0.14 "
-    })
+    try:
+        rRoute = requests.get("https://ews-rpx.ns.nl/mobile-api-planner", params = params, headers = {
+            "Accept-Encoding": "gzip",
+            # The default username and password (android, mvdzig) works for any non-auth endpoint
+            "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
+            "Connection": "Keep-Alive",
+            "User-Agent": "ReisplannerXtra/5.0.14 "
+        })
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError("Could not connect to NS servers.")
+
 
     routes = xmltodict.parse(rRoute.text)
     routes = routes["ReisMogelijkheden"]["ReisMogelijkheid"]
@@ -181,16 +191,19 @@ def getRoute(route, time=datetime.now()):
 def getDepartures(station):
     """Get departing trains from a station."""
     if station not in STATIONS:
-        raise InvalidStation("\"%s\" is not a valid station code." % station)
+        raise InvalidStation("\"{}\" is not a valid station code.".format(station))
 
-    response = requests.get("https://ews-rpx.ns.nl/mobile-api-avt", params = [
-        ("station", station)
-    ], headers = {
-        "Accept-Encoding": "gzip",
-        "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
-        "Connection": "Keep-Alive",
-        "User-Agent": "ReisplannerXtra/5.0.14 "
-    })
+    try:
+        response = requests.get("https://ews-rpx.ns.nl/mobile-api-avt", params = [
+            ("station", station)
+        ], headers = {
+            "Accept-Encoding": "gzip",
+            "Authorization": "Basic YW5kcm9pZDptdmR6aWc=",
+            "Connection": "Keep-Alive",
+            "User-Agent": "ReisplannerXtra/5.0.14 "
+        })
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError("Could not connect to NS servers.")
 
     departures = xmltodict.parse(response.text)["ActueleVertrekTijden"]["VertrekkendeTrein"]
     output = []

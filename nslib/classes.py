@@ -1,3 +1,6 @@
+"""
+Classes for data object such as trains or cards in nslib.
+"""
 import requests
 import base64
 import uuid
@@ -15,7 +18,6 @@ TRAIN_CACHE_SEC = 240
 
 class Card(object):
     """Representation of a single ov-chipcard."""
-
     def __init__(self, number, headers):
         self.number = number
 
@@ -34,9 +36,8 @@ class Card(object):
         except requests.exceptions.ConnectionError:
             raise ConnectionError("Could not connect to NS servers.")
 
-        # This endpoint is strictly rate limited, this error will solve itself in a minute or 2
         if "Minimum request interval exceeded" in rCID.text:
-            raise TooManyRequests("Minimum request interval exceeded.")
+            raise TooManyRequests("Minimum request interval exceeded.") # This endpoint is strictly rate limited, this error will solve itself in a minute or 2
 
         self._CID = rCID.json()["cid"]
 

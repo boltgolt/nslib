@@ -1,10 +1,14 @@
+"""
+Helper functions for nslib.
+"""
 def fetchStations():
+    """Refresh the local list of known stations."""
     import datetime
     import json
     import requests
     import os
 
-    from .nsexceptions import InvalidResponse
+    from .nsexceptions import InvalidResponse, ConnectionError
 
     countryCodes = {
         "A": "AT",
@@ -22,7 +26,10 @@ def fetchStations():
         "User-Agent": "Apache-HttpClient/UNAVAILABLE (java 1.4)"
     }
 
-    rStations = requests.get("https://reisinfo.ns-mlab.nl/api/v2/stations", headers=headers)
+    try:
+        rStations = requests.get("https://reisinfo.ns-mlab.nl/api/v2/stations", headers=headers)
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError("Could not connect to NS servers.")
 
     if rStations.status_code != 200:
         raise InvalidResponse("Request resulted in {} status code".format(rStations.status_code))
@@ -56,12 +63,13 @@ def fetchStations():
     _LOGGER.info("Successfully indexed {}KB of station data.".format(round(len(rStations.content) / 1024,1)))
 
 def getStation(code):
+    """Get a station object from the station code."""
     from .stations import STATIONS
 
     code = code.upper()
 
     if code not in STATIONS:
-        raise InvalidStation("\"%s\" is not a valid station code." % code)
+        raise InvalidStation("\"{}\" is not a valid station code.".format(code))
 
     station = STATIONS[code]
     station["code"] = code

@@ -1,3 +1,6 @@
+"""
+A collection of Exceptions for nslib.
+"""
 class InvalidCredentials(Exception):
     """The username or password are invalid."""
 
